@@ -6,6 +6,8 @@
 #include <array>
 #include "Reg_Rat.h"
 #include "Executor.h"
+#include "Rob.h"
+#include "Rob_Entry.h"
 const int ADD_SUB_RS = 3;
 const int MUL_DIV_RS = 2;
 
@@ -38,7 +40,7 @@ struct RS_DIVIDER {
 
 int Issue(std::vector<Instruction> & instructions, 
 	std::array<ReservationStation, MUL_DIV_RS + ADD_SUB_RS> & res_unit,
-	std::array <Reg_Rat, NUM_REG> & registers,
+	std::array <Reg_Rat, NUM_REG> & registers, Rob & rob,
 	int instr_counter);
 void Dispatch(std::array<ReservationStation, MUL_DIV_RS + ADD_SUB_RS> & res_unit,
 	std::array <Reg_Rat, NUM_REG> & registers,
@@ -46,6 +48,8 @@ void Dispatch(std::array<ReservationStation, MUL_DIV_RS + ADD_SUB_RS> & res_unit
 void Broadcast(std::array<ReservationStation, MUL_DIV_RS + ADD_SUB_RS> & res_unit,
 	std::array <Reg_Rat, NUM_REG> & registers,
 	std::array <Executor, 2> & executors);
+void Commit(std::array<ReservationStation, MUL_DIV_RS + ADD_SUB_RS>& res_unit,
+	std::array <Reg_Rat, NUM_REG>& registers);
 void printRegister(std::array <Reg_Rat, NUM_REG> & registers);
 void printReservationStations(std::array<ReservationStation, MUL_DIV_RS + ADD_SUB_RS> & res_unit);
 
@@ -116,6 +120,7 @@ int main(int argc, char* argv[])
 		registers[i] = Reg_Rat(value, "R" + std::to_string(i));
 	}
 
+	Rob rob = Rob(6);
 	instr_file.close();
 
 	std::cout << "Instructions:" << std::endl;
@@ -143,7 +148,7 @@ int main(int argc, char* argv[])
 
 	int instr_counter = 0;
 	for (int i = 1; i <= num_cycles; ++i) {
-		instr_counter = Issue(instructions, reservation_unit, registers, instr_counter);
+		instr_counter = Issue(instructions, reservation_unit, registers, rob, instr_counter);
 		Dispatch(reservation_unit, registers, executors);
 		Broadcast(reservation_unit, registers, executors);
 	}
@@ -171,7 +176,7 @@ Pass all Instructions, may convert from vector to queue.
 */
 int Issue(std::vector<Instruction> & instructions,
 	std::array<ReservationStation, MUL_DIV_RS + ADD_SUB_RS> & res_unit,
-	std::array <Reg_Rat, NUM_REG> & registers, int instr_counter) {
+	std::array <Reg_Rat, NUM_REG> & registers, Rob & rob, int instr_counter) {
 	if (instructions.size() <= instr_counter) {
 		return -1;
 	}
@@ -179,18 +184,25 @@ int Issue(std::vector<Instruction> & instructions,
 	if (instr_counter == -1) {
 		return -1;
 	}
+
+	if (rob.Rob_Full())
+		return instr_counter;
+
 	bool RS_free = false;
 	int opcode = instructions[instr_counter].op;
 	int rs_slot;
+	int rob_entry;
 	//If add or sub loop through looking for free RS.
 	if (opcode == 0 || opcode == 1) {
 		for (int i = RS_Bounds.ADD_START; i < RS_Bounds.ADD_END; ++i) {
 			if (!res_unit[i].busy) {
 				instructions[instr_counter].op = -1;
+				rob_entry = rob.Reserve_Rob(instructions[instr_counter].rd);
 				rs_slot = i;
 				++instr_counter;
 				res_unit[i].op = opcode; //Will assign either add or sub
 				RS_free = true;
+				
 				break;
 			}
 		}
@@ -203,6 +215,7 @@ int Issue(std::vector<Instruction> & instructions,
 		for (int i = RS_Bounds.MUL_START; i < RS_Bounds.MUL_END; i++) {
 			if (!res_unit[i].busy) {
 				instructions[instr_counter].op = -1;
+				rob_entry = rob.Reserve_Rob(instructions[instr_counter].rd);
 				rs_slot = i;
 				++instr_counter;
 				res_unit[i].op = opcode; //Will assign either Mul or Div
@@ -240,7 +253,7 @@ int Issue(std::vector<Instruction> & instructions,
 
 	res_unit[rs_slot].busy = true;
 	res_unit[rs_slot].issue_lat = 0;
-	registers[instr.rd].rat = rs_slot;
+	registers[instr.rd].rat = rob_entry;
 	return instr_counter;
 
 }
@@ -365,14 +378,14 @@ void printReservationStations(std::array<ReservationStation, MUL_DIV_RS + ADD_SU
 	for (int i = 0; i < res_unit.size(); ++i) {
 		//Print nothing if RS unit is not busy
 		if (res_unit[i].op == -1) {
-			std::cout << "RS" << i + 1 << ":\t" << Opcode(res_unit[i].op) << "\t" <<
+			std::cout << "ROB" << i + 1 << ":\t" << Opcode(res_unit[i].op) << "\t" <<
 				"" << "\t" << "" << "\t" <<
 				"" << "\t" << "" << "\t" <<
 				res_unit[i].busy << "\t" << res_unit[i].disp << std::endl;
 		}
 		//Print info if RS is busy
 		else {
-			std::cout << "RS" << i + 1 << ":\t" << Opcode(res_unit[i].op) << "\t" <<
+			std::cout << "ROB" << i + 1 << ":\t" << Opcode(res_unit[i].op) << "\t" <<
 				res_unit[i].Print_Tag(1) << "\t" << res_unit[i].Print_Tag(2) << "\t" <<
 				res_unit[i].value1 << "\t" << res_unit[i].value2 << "\t" <<
 				res_unit[i].busy << "\t" << res_unit[i].disp << std::endl;

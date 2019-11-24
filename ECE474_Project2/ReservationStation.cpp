@@ -73,7 +73,7 @@ std::string ReservationStation::Print_Tag(int tag)
 			return "";
 		}
 		else {
-			return "RS" + std::to_string(tag1 + 1);
+			return "ROB" + std::to_string(tag1 + 1);
 		}
 	}
 	if (tag == 2) {
@@ -81,7 +81,7 @@ std::string ReservationStation::Print_Tag(int tag)
 			return "";
 		}
 		else {
-			return "RS" + std::to_string(tag2 + 1);
+			return "ROB" + std::to_string(tag2 + 1);
 		}
 	}
 	return "";
