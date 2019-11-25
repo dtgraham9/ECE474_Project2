@@ -15,6 +15,7 @@ public:
 	int ext_lat;
 	int broadcast_lat;
 	int internal_result;
+	int exception;
 public:
 	void Prime_Executor(ReservationStation &);
 	Executor();
@@ -22,5 +23,6 @@ public:
 	void Reset();
 	bool Broadcast_Ready(int);
 	bool Busy();
+	bool Check_Exception();
 };
 

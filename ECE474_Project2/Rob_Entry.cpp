@@ -3,7 +3,7 @@
 Rob_Entry::Rob_Entry(int index)
 {
 	value = 0;
-	reg_num = 0;
+	reg_num = -1;
 	exception = 0;
 	rob_num = index;
 	done = false;
@@ -21,7 +21,7 @@ bool Rob_Entry::Check_Exception()
 
 void Rob_Entry::Clear_Rob_Entry()
 {
-	reg_num = 0;
+	reg_num = -1;
 	value = 0;
 	done = false;
 	exception = 0;
@@ -46,3 +46,4 @@ void Rob_Entry::Exception_Update()
 	exception = 1;
 	done = true;
 }
+

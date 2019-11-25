@@ -16,8 +16,8 @@ public:
 	int ext_lat; //Track execution of RS in execute
 	int issue_lat;  //track issue latency
 	int broadcast_lat; //track broadcast latency
-	int reg_loc;
-	std::string disp;
+	int dest_tag;
+	int disp;
 
 	//**** Methods
 public:

@@ -5,6 +5,7 @@
 typedef struct {
 	int reg_num;
 	int value;
+	int rob_index;
 } Commit_Tag;
 
 class Rob

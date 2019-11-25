@@ -18,9 +18,10 @@ void Executor::Prime_Executor(ReservationStation & RS)
 	op = RS.op;
 	from_tag = RS.index;
 	latency = 0;
-	dest_tag = RS.reg_loc;
+	dest_tag = RS.dest_tag;
 	broadcast_lat = 1;
 	internal_result = 0;
+	exception = 0;
 
 	switch (op) {
 	case 0: //add
@@ -36,7 +37,13 @@ void Executor::Prime_Executor(ReservationStation & RS)
 		ext_lat = MULT_LAT;
 		break;
 	case 3://div
-		internal_result = value1 / value2;
+		if (value2 == 0) {
+			exception = 1;
+			internal_result = 0;
+		}
+		else {
+			internal_result = value1 / value2;
+		}
 		ext_lat = DIV_LAT;
 		break;
 	default:
@@ -56,6 +63,7 @@ Executor::Executor()
 	result_ready = false;
 	broadcast_lat = 1;
 	from_tag = -1;
+	exception = 0;
 
 }
 //increment latency
@@ -80,6 +88,7 @@ void Executor::Reset() {
 	busy = false;
 	ext_lat = 0;
 	broadcast_lat = 1;
+	exception = 0;
 }
 
 bool Executor::Broadcast_Ready(int broadcast)
@@ -98,4 +107,15 @@ bool Executor::Busy()
 		return true;
 	}
 	return false;
+}
+
+bool Executor::Check_Exception()
+{
+	if (exception == 1) {
+		return true;
+	}
+	else {
+		return false;
+	}
+	
 }

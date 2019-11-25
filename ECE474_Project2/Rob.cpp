@@ -77,11 +77,12 @@ Commit_Tag Rob::Commit()
 		throw "ROB is empty";
 	
 	if (rob[commit].latency == 0)
-		return;
+		throw "ROB hasn't delayed";
 	
 	if (num_entries == 1) {
 		commit_msg.reg_num = rob[commit].reg_num;
 		commit_msg.value = rob[commit].value;
+		commit_msg.rob_index = rob[commit].rob_num-1;
 		rob[commit].Clear_Rob_Entry();
 		num_entries--;
 	}
@@ -89,6 +90,7 @@ Commit_Tag Rob::Commit()
 	else {
 		commit_msg.reg_num = rob[commit].reg_num;
 		commit_msg.value = rob[commit].value;
+		commit_msg.rob_index = rob[commit].rob_num-1;
 		rob[commit].Clear_Rob_Entry();
 		if (commit == num_rob - 1) {
 			commit = 0;
@@ -141,9 +143,9 @@ void Rob::Update_Latency()
 
 bool Rob::Commit_Ready()
 {
-	if (rob[commit].latency == 0)
-		return false;
-	else
+	if (rob[commit].latency != 0 && rob[commit].done == true)
 		return true;
+	else
+		return false;
 }
 

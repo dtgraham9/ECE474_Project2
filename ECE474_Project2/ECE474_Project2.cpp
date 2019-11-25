@@ -10,7 +10,7 @@
 #include "Rob_Entry.h"
 const int ADD_SUB_RS = 3;
 const int MUL_DIV_RS = 2;
-
+const int ROB_SIZE = 6;
 //Latencies for different stages
 const int ISSUE_LAT = 1;
 const int BROADCAST_LAT = 1;
@@ -47,11 +47,12 @@ void Dispatch(std::array<ReservationStation, MUL_DIV_RS + ADD_SUB_RS> & res_unit
 	std::array <Executor, 2> & executors);
 void Broadcast(std::array<ReservationStation, MUL_DIV_RS + ADD_SUB_RS> & res_unit,
 	std::array <Reg_Rat, NUM_REG> & registers,
-	std::array <Executor, 2> & executors);
+	std::array <Executor, 2> & executors, Rob & rob);
 void Commit(std::array<ReservationStation, MUL_DIV_RS + ADD_SUB_RS>& res_unit,
-	std::array <Reg_Rat, NUM_REG>& registers);
+	std::array <Reg_Rat, NUM_REG>& registers, Rob & rob);
 void printRegister(std::array <Reg_Rat, NUM_REG> & registers);
 void printReservationStations(std::array<ReservationStation, MUL_DIV_RS + ADD_SUB_RS> & res_unit);
+void Print_Rob(Rob& rob);
 
 std::string Opcode(int op) {
 	switch (op)
@@ -120,7 +121,7 @@ int main(int argc, char* argv[])
 		registers[i] = Reg_Rat(value, "R" + std::to_string(i));
 	}
 
-	Rob rob = Rob(6);
+	Rob rob = Rob(ROB_SIZE);
 	instr_file.close();
 
 	std::cout << "Instructions:" << std::endl;
@@ -150,7 +151,8 @@ int main(int argc, char* argv[])
 	for (int i = 1; i <= num_cycles; ++i) {
 		instr_counter = Issue(instructions, reservation_unit, registers, rob, instr_counter);
 		Dispatch(reservation_unit, registers, executors);
-		Broadcast(reservation_unit, registers, executors);
+		Broadcast(reservation_unit, registers, executors, rob);
+		Commit(reservation_unit, registers, rob);
 	}
 	std::cout << std::endl;
 	std::cout << "Cycle: " << num_cycles << "\n" << std::endl;
@@ -165,6 +167,8 @@ int main(int argc, char* argv[])
 		else
 			std::cout << op << " R" << instructions[i].rd << ", R" << instructions[i].rs << ", R" << instructions[i].rt << std::endl;
 	}
+	std::cout << std::endl;
+	Print_Rob(rob);
 
 }
 /*
@@ -233,22 +237,22 @@ int Issue(std::vector<Instruction> & instructions,
 	if (registers[instr.rs].rat == OPERAND_READY) {
 		res_unit[rs_slot].value1 = registers[instr.rs].value;
 		res_unit[rs_slot].tag1 = OPERAND_READY;
-		res_unit[rs_slot].reg_loc = instr.rd;
+		res_unit[rs_slot].dest_tag = rob_entry;
 	}
 	else {
 		res_unit[rs_slot].tag1 = registers[instr.rs].rat;
-		res_unit[rs_slot].reg_loc = instr.rd;
+		res_unit[rs_slot].dest_tag = rob_entry;
 	}
 
 	//Tackle Rd
 	if (registers[instr.rt].rat == OPERAND_READY) {
 		res_unit[rs_slot].value2 = registers[instr.rt].value;
 		res_unit[rs_slot].tag2 = OPERAND_READY;
-		res_unit[rs_slot].reg_loc = instr.rd;
+		res_unit[rs_slot].dest_tag = rob_entry;
 	}
 	else {
 		res_unit[rs_slot].tag2 = registers[instr.rt].rat;
-		res_unit[rs_slot].reg_loc = instr.rd;
+		res_unit[rs_slot].dest_tag = rob_entry;
 	}
 
 	res_unit[rs_slot].busy = true;
@@ -266,7 +270,7 @@ void Dispatch(std::array<ReservationStation, MUL_DIV_RS + ADD_SUB_RS> & res_unit
 	if (!executors[0].busy) {
 		for (int i = RS_Bounds.ADD_START; i < RS_Bounds.ADD_END; ++i) {
 			if (res_unit[i].Check_Dispatch_Ready(ISSUE_LAT)) {
-				res_unit[i].disp = "1";
+				res_unit[i].disp = 1;
 				executors[0].Prime_Executor(res_unit[i]);
 				break;
 			}
@@ -279,7 +283,7 @@ void Dispatch(std::array<ReservationStation, MUL_DIV_RS + ADD_SUB_RS> & res_unit
 	if (!executors[1].busy) {
 		for (int i = RS_Bounds.MUL_START; i < RS_Bounds.MUL_END; ++i) {
 			if (res_unit[i].Check_Dispatch_Ready(ISSUE_LAT)) {
-				res_unit[i].disp = "1";
+				res_unit[i].disp = 1;
 				executors[1].Prime_Executor(res_unit[i]);
 				break;
 			}
@@ -304,59 +308,101 @@ clear reservation station and executor
 */
 void Broadcast(std::array<ReservationStation, MUL_DIV_RS + ADD_SUB_RS> & res_unit,
 	std::array <Reg_Rat, NUM_REG> & registers,
-	std::array <Executor, 2> & executors) {
+	std::array <Executor, 2> & executors, Rob & rob) {
 	/*
 	Check Mult and Div executor first so it can broadcast if ready
 	*/
 	if (executors[1].Broadcast_Ready(BROADCAST_LAT)) {
-		int reg_index = executors[1].dest_tag;
-		int executor_from_tag = executors[1].from_tag;
+		int rob_index = executors[1].dest_tag; //important tag holds ROB information
+		//int executor_from_tag = executors[1].from_tag; // Held Rerv Station index but not needed for commit
 		int executor_result = executors[1].result;
-		res_unit[executor_from_tag].ClearResrvStat(); //clear RS and executor for next RS dispatch
+		//res_unit[executor_from_tag].ClearResrvStat(); //clear RS and executor for next RS dispatch
+		
+		if (executors[1].Check_Exception()) {
+			rob.Exception_Update(rob_index);
+		}
+		else {
+			rob.Update_Rob(rob_index, executor_result);
+		}
+
 		executors[1].Reset();
 		//See if another RS is ready to be dispatched
 		for (int i = RS_Bounds.MUL_START; i < RS_Bounds.MUL_END; ++i) {
 			if (res_unit[i].Check_Dispatch_Ready(ISSUE_LAT)) {
-				res_unit[i].disp = "1";
+				res_unit[i].disp = 1;
 				executors[1].Prime_Executor(res_unit[i]);
 				break;
 			}
 		}
-		if (registers[reg_index].rat == executor_from_tag) {
-			registers[reg_index].Set_New(executor_result);
-		}
+		/*if (registers[rob_index].rat == executor_from_tag) {
+			registers[rob_index].Set_New(executor_result);
+		}*/
 		//Broadcast value to RSs
 		for (int i = 0; i < ADD_SUB_RS + MUL_DIV_RS; ++i) {
-			res_unit[i].Recieve_Broadcast(executor_from_tag, executor_result);
+			res_unit[i].Recieve_Broadcast(rob_index, executor_result);
 		}
 		
 		return ;
 	}
 
 	if (executors[0].Broadcast_Ready(BROADCAST_LAT)) {
-		int reg_index = executors[0].dest_tag;
-		int executor_from_tag = executors[0].from_tag;
+		int rob_index = executors[0].dest_tag;
+		//int executor_from_tag = executors[0].from_tag;
 		int executor_result = executors[0].result;
-		res_unit[executor_from_tag].ClearResrvStat(); //clear RS and executor for next RS
+		//res_unit[executor_from_tag].ClearResrvStat(); //clear RS and executor for next RS
+		if (executors[0].Check_Exception()) {
+			rob.Exception_Update(rob_index);
+		}
+		else {
+			rob.Update_Rob(rob_index, executor_result);
+		}
+		
 		executors[0].Reset();
 		//See if another RS is ready to be dispatched
 		for (int i = RS_Bounds.ADD_START; i < RS_Bounds.ADD_END; ++i) {
 			if (res_unit[i].Check_Dispatch_Ready(ISSUE_LAT)) {
-				res_unit[i].disp = "1";
+				res_unit[i].disp = 1;
 				executors[0].Prime_Executor(res_unit[i]);
 				break;
 			}
 		}
-		if (registers[reg_index].rat == executor_from_tag) {
+		/*if (registers[rob_index].rat == executor_from_tag) {
 			registers[reg_index].Set_New(executor_result);
-		}
+		}*/
 		//Broadcast value to RSs
 		for (int i = 0; i < ADD_SUB_RS + MUL_DIV_RS; ++i) {
-			res_unit[i].Recieve_Broadcast(executor_from_tag, executor_result);
+			res_unit[i].Recieve_Broadcast(rob_index, executor_result);
 		}
-		res_unit[executor_from_tag].ClearResrvStat();
+
+		
+
+		//res_unit[rob_index].ClearResrvStat();
 		
 		return;
+	}
+
+}
+
+void Commit(std::array<ReservationStation, MUL_DIV_RS + ADD_SUB_RS>& res_unit,
+	std::array <Reg_Rat, NUM_REG>& registers, Rob & rob) {
+	Commit_Tag commit;
+	
+	if (rob.Check_Exception()) {
+		rob.Handle_Exception();
+		return;
+	}
+
+	if (rob.Commit_Ready() && !rob.Rob_Empty()) {
+		commit = rob.Commit();
+		registers[commit.reg_num].Set_New(commit.value, commit.rob_index);
+	}
+
+	rob.Update_Latency();
+
+	for (int i = 0; i < MUL_DIV_RS + ADD_SUB_RS; ++i) {
+		if (res_unit[i].disp == 1) {
+			res_unit[i].ClearResrvStat();
+		}
 	}
 
 }
@@ -374,23 +420,39 @@ void printRegister(std::array <Reg_Rat, NUM_REG> & registers) {
 //Print reservation stations
 void printReservationStations(std::array<ReservationStation, MUL_DIV_RS + ADD_SUB_RS> & res_unit) {
 	std::cout << "Reservation Stations:" << std::endl;
-	std::cout << "RS\tOP\tTag1\tTag2\tValue1\tValue2\tBusy\tDisp" << std::endl;
+	std::cout << "RS\tOP\tDest Tag\tTag1\tTag2\tValue1\tValue2\tBusy" << std::endl;
 	for (int i = 0; i < res_unit.size(); ++i) {
 		//Print nothing if RS unit is not busy
 		if (res_unit[i].op == -1) {
-			std::cout << "ROB" << i + 1 << ":\t" << Opcode(res_unit[i].op) << "\t" <<
+			std::cout << "RS" << i + 1 << ":\t" << Opcode(res_unit[i].op) << "\t\t" <<
+				"\t"<< "" << "\t" << "" << "\t" <<
 				"" << "\t" << "" << "\t" <<
-				"" << "\t" << "" << "\t" <<
-				res_unit[i].busy << "\t" << res_unit[i].disp << std::endl;
+				res_unit[i].busy << std::endl;
 		}
 		//Print info if RS is busy
 		else {
-			std::cout << "ROB" << i + 1 << ":\t" << Opcode(res_unit[i].op) << "\t" <<
-				res_unit[i].Print_Tag(1) << "\t" << res_unit[i].Print_Tag(2) << "\t" <<
+			std::cout << "RS" << i + 1 << ":\t" << Opcode(res_unit[i].op) << "\t" <<
+				"ROB" << res_unit[i].dest_tag +1 << "\t\t" << res_unit[i].Print_Tag(1) << "\t" << res_unit[i].Print_Tag(2) << "\t" <<
 				res_unit[i].value1 << "\t" << res_unit[i].value2 << "\t" <<
-				res_unit[i].busy << "\t" << res_unit[i].disp << std::endl;
+				res_unit[i].busy  <<  "\t" << res_unit[i].disp << std::endl;
 		}
 		
+	}
+}
+
+void Print_Rob(Rob& rob) {
+	std::cout << "ROB Table" << std::endl;
+	std::cout << "ROB\tREG NUM\tValue\tDone\tException" << std::endl;
+	for (int i = 0; i < ROB_SIZE; ++i) {
+		
+		if (rob.rob[i].reg_num == -1) {
+			std::cout << "ROB" << i + 1 << ":\t\t\t\t\t" <<  std::endl;
+		}
+		else {
+			std::cout << "ROB" << i + 1 << ":\tR" << rob.rob[i].reg_num << "\t"
+				<< rob.rob[i].value << "\t" << rob.rob[i].done << "\t" <<
+				rob.rob[i].exception << std::endl;
+		}
 	}
 }
 

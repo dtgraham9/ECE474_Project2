@@ -11,6 +11,6 @@ public:
 	Reg_Rat();
 	Reg_Rat(int val, std::string);
 	std::string Name_Resolver();
-	void Set_New(int);
+	void Set_New(int, int);
 };
 

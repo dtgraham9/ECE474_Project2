@@ -11,7 +11,7 @@ void ReservationStation::ClearResrvStat()
 	issue_lat = 0;
 	ext_lat = 0;
 	broadcast_lat = 0;
-	disp = "";
+	disp = 0;
 	op = -1;
 }
 
@@ -27,13 +27,13 @@ ReservationStation::ReservationStation(){
     issue_lat = 0;
 	ext_lat = 0;
     broadcast_lat= 0;
-	disp = "";
+	disp = 0;
 }
 
 //Constructor for the reservation station
 ReservationStation::ReservationStation(int index_value)
 {
-	disp = "";
+	disp = 0;
 	index = index_value;
 	busy = false;
 	op = -1;
