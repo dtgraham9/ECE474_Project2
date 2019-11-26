@@ -122,21 +122,25 @@ void Rob::Update_Latency()
 		return;
 
 	else if (commit == tail) {
-		rob[commit].latency++;
+		if (rob[commit].done == true)
+			rob[commit].latency++;
 	}
 
 	else if (commit > tail) {
 		for (int i = commit; i <= num_rob; ++i) {
-			rob[i].latency++;
+			if(rob[i].done == true)
+				rob[i].latency++;
 		}
 		for (int i = 0; i <= tail; ++i) {
-			rob[i].latency++;
+			if (rob[i].done == true)
+				rob[i].latency++;
 		}
 	}
 
 	else if (commit < tail) {
 		for (int i = commit; i <= tail; ++i) {
-			rob[i].latency++;
+			if (rob[i].done == true)
+				rob[i].latency++;
 		}
 	}
 }

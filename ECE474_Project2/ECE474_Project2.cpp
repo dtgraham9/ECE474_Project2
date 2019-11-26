@@ -53,6 +53,7 @@ void Commit(std::array<ReservationStation, MUL_DIV_RS + ADD_SUB_RS>& res_unit,
 void printRegister(std::array <Reg_Rat, NUM_REG> & registers);
 void printReservationStations(std::array<ReservationStation, MUL_DIV_RS + ADD_SUB_RS> & res_unit);
 void Print_Rob(Rob& rob);
+void Print_Executor(std::array <Executor, 2>& executors);
 
 std::string Opcode(int op) {
 	switch (op)
@@ -167,6 +168,8 @@ int main(int argc, char* argv[])
 		else
 			std::cout << op << " R" << instructions[i].rd << ", R" << instructions[i].rs << ", R" << instructions[i].rt << std::endl;
 	}
+	std::cout << std::endl;
+	Print_Executor(executors);
 	std::cout << std::endl;
 	Print_Rob(rob);
 
@@ -454,6 +457,28 @@ void Print_Rob(Rob& rob) {
 				rob.rob[i].exception << std::endl;
 		}
 	}
+}
+
+void Print_Executor(std::array <Executor, 2>& executors) {
+	std::cout << "ALU" << std::endl;
+	std::cout << "ALU\t\tOP\tOperand 1\tOperand 2\tResult\t\tDest Tag\tException\tCycles Left" << std::endl;
+	std::cout << "ADD/SUB\t\t";
+	if (executors[0].op != -1) {
+		std::cout << Opcode(executors[0].op) << "\t" << executors[0].value1 <<
+			"\t\t" << executors[0].value2 << "\t\t" << executors[0].internal_result << "\t\t" << "ROB" << executors[0].dest_tag + 1 <<
+			"\t\t" << executors[0].exception << "\t\t" << executors[0].ext_lat - executors[0].latency << std::endl;
+	}
+	else
+		std::cout << std::endl;
+	std::cout << "MUL/DIV";
+	if (executors[1].op != -1)
+	{
+		std::cout << Opcode(executors[1].op) << "\t" << executors[1].value1 <<
+			"\t\t" << executors[1].value2 << "\t\t" << executors[1].internal_result << "\t\t" << "ROB" << executors[1].dest_tag + 1 <<
+			"\t\t" << executors[1].exception << "\t\t" << executors[1].ext_lat - executors[1].latency << std::endl;
+	}
+	else
+		std::cout << std::endl;
 }
 
 

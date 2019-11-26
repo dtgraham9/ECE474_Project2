@@ -74,7 +74,8 @@ void Executor::Execute()
 		result_ready = true;
 		result = internal_result;
 	}
-	++latency;
+	if(ext_lat > latency )
+		++latency;
 	
 }
 
@@ -119,3 +120,4 @@ bool Executor::Check_Exception()
 	}
 	
 }
+
