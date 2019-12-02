@@ -242,6 +242,11 @@ int Issue(std::vector<Instruction> & instructions,
 		res_unit[rs_slot].tag1 = OPERAND_READY;
 		res_unit[rs_slot].dest_tag = rob_entry;
 	}
+	else if (rob.Check_Entry_Ready(registers[instr.rs].rat)) {
+		res_unit[rs_slot].value1 = rob.Get_Rob_Entry(registers[instr.rs].rat);
+		res_unit[rs_slot].tag1 = OPERAND_READY;
+		res_unit[rs_slot].dest_tag = rob_entry;
+	}
 	else {
 		res_unit[rs_slot].tag1 = registers[instr.rs].rat;
 		res_unit[rs_slot].dest_tag = rob_entry;
@@ -250,6 +255,11 @@ int Issue(std::vector<Instruction> & instructions,
 	//Tackle Rd
 	if (registers[instr.rt].rat == OPERAND_READY) {
 		res_unit[rs_slot].value2 = registers[instr.rt].value;
+		res_unit[rs_slot].tag2 = OPERAND_READY;
+		res_unit[rs_slot].dest_tag = rob_entry;
+	}
+	else if (rob.Check_Entry_Ready(registers[instr.rt].rat)) {
+		res_unit[rs_slot].value2 = rob.Get_Rob_Entry(registers[instr.rt].rat);
 		res_unit[rs_slot].tag2 = OPERAND_READY;
 		res_unit[rs_slot].dest_tag = rob_entry;
 	}
@@ -385,13 +395,30 @@ void Broadcast(std::array<ReservationStation, MUL_DIV_RS + ADD_SUB_RS> & res_uni
 	}
 
 }
-
+/*Commit stage of pipeline
+Close program if Divide by zero is present
+If ROB can commit then update registers and clear ROB entry
+*/
 void Commit(std::array<ReservationStation, MUL_DIV_RS + ADD_SUB_RS>& res_unit,
 	std::array <Reg_Rat, NUM_REG>& registers, Rob & rob) {
 	Commit_Tag commit;
 	
-	if (rob.Check_Exception()) {
+	if (rob.Check_Exception() && rob.Commit_Ready() && !rob.Rob_Empty()) {
 		rob.Handle_Exception();
+		for (int i = 0; i < MUL_DIV_RS + ADD_SUB_RS; ++i) {
+			res_unit[i].ClearResrvStat();
+		}
+		for (int i = 0; i < NUM_REG; ++i) {
+			registers[i].rat = -1;
+		}
+		std::cout << std::endl;
+		printRegister(registers);
+		std::cout << std::endl;
+		printReservationStations(res_unit);
+		std::cout << std::endl;
+		Print_Rob(rob);
+		std::cout << "Divide by Zero caught and cleared program terminated" << std::endl;
+		exit(1);
 		return;
 	}
 
@@ -399,9 +426,9 @@ void Commit(std::array<ReservationStation, MUL_DIV_RS + ADD_SUB_RS>& res_unit,
 		commit = rob.Commit();
 		registers[commit.reg_num].Set_New(commit.value, commit.rob_index);
 	}
-
+	//update ROB entries's latency.
 	rob.Update_Latency();
-
+	//Clear reservation unit if it has been dispatched
 	for (int i = 0; i < MUL_DIV_RS + ADD_SUB_RS; ++i) {
 		if (res_unit[i].disp == 1) {
 			res_unit[i].ClearResrvStat();
@@ -437,32 +464,47 @@ void printReservationStations(std::array<ReservationStation, MUL_DIV_RS + ADD_SU
 			std::cout << "RS" << i + 1 << ":\t" << Opcode(res_unit[i].op) << "\t" <<
 				"ROB" << res_unit[i].dest_tag +1 << "\t\t" << res_unit[i].Print_Tag(1) << "\t" << res_unit[i].Print_Tag(2) << "\t" <<
 				res_unit[i].value1 << "\t" << res_unit[i].value2 << "\t" <<
-				res_unit[i].busy  <<  "\t" << res_unit[i].disp << std::endl;
+				res_unit[i].busy  <<  "\t"  << std::endl;
 		}
 		
 	}
 }
-
+//Print ROB with commit and tail pointers
 void Print_Rob(Rob& rob) {
 	std::cout << "ROB Table" << std::endl;
 	std::cout << "ROB\tREG NUM\tValue\tDone\tException" << std::endl;
 	for (int i = 0; i < ROB_SIZE; ++i) {
-		
+		//if ROB entry is empty
 		if (rob.rob[i].reg_num == -1) {
-			std::cout << "ROB" << i + 1 << ":\t\t\t\t\t" <<  std::endl;
+			std::cout << "ROB" << i + 1 << ":\t\t\t\t\t";
 		}
+		//If ROB is occupied
 		else {
 			std::cout << "ROB" << i + 1 << ":\tR" << rob.rob[i].reg_num << "\t"
 				<< rob.rob[i].value << "\t" << rob.rob[i].done << "\t" <<
-				rob.rob[i].exception << std::endl;
+				rob.rob[i].exception;
+		}
+		//Add ROB pointers
+		if (rob.commit == i && rob.tail == i) {
+			std::cout << "\t<--- commit & tail" << std::endl;
+		}
+		else if (rob.commit == i) {
+			std::cout << "\t<--- commit" << std::endl;
+		}
+		else if (rob.tail == i) {
+			std::cout << "\t<--- tail" << std::endl;
+		}
+		else {
+			std::cout << std::endl;
 		}
 	}
 }
-
+//Print Executor information
 void Print_Executor(std::array <Executor, 2>& executors) {
 	std::cout << "ALU" << std::endl;
 	std::cout << "ALU\t\tOP\tOperand 1\tOperand 2\tResult\t\tDest Tag\tException\tCycles Left" << std::endl;
 	std::cout << "ADD/SUB\t\t";
+	//if executor is occupied
 	if (executors[0].op != -1) {
 		std::cout << Opcode(executors[0].op) << "\t" << executors[0].value1 <<
 			"\t\t" << executors[0].value2 << "\t\t" << executors[0].internal_result << "\t\t" << "ROB" << executors[0].dest_tag + 1 <<
@@ -470,7 +512,8 @@ void Print_Executor(std::array <Executor, 2>& executors) {
 	}
 	else
 		std::cout << std::endl;
-	std::cout << "MUL/DIV";
+	std::cout << "MUL/DIV\t\t";
+	//if executor is occupied
 	if (executors[1].op != -1)
 	{
 		std::cout << Opcode(executors[1].op) << "\t" << executors[1].value1 <<

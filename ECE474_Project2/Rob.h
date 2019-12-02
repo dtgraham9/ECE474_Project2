@@ -29,5 +29,7 @@ public:
 	void Handle_Exception();
 	void Update_Latency();
 	bool Commit_Ready();
+	bool Check_Entry_Ready(int);
+	int Get_Rob_Entry(int);
 };
 

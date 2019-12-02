@@ -64,6 +64,7 @@ Executor::Executor()
 	broadcast_lat = 1;
 	from_tag = -1;
 	exception = 0;
+	op = -1;
 
 }
 //increment latency
